@@ -1,0 +1,3 @@
+com/gateway/config/SecurityConfig.class
+com/gateway/LoggingFilter.class
+com/gateway/GatewayApplication.class
