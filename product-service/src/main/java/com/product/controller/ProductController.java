@@ -5,6 +5,7 @@ import com.product.dto.ProductResponse;
 import com.product.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+//import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 
@@ -36,8 +37,8 @@ public class ProductController {
     // Get Product By Id
     @GetMapping("/{id}")
     public ProductResponse getProduct(
-            @PathVariable Long id) {
-
+            @PathVariable Long id) throws InterruptedException {
+        //Thread.sleep(5000);
         return service.getById(id);
     }
 
@@ -62,9 +63,10 @@ public class ProductController {
     @PutMapping("/{id}/reduce-stock")
     public String reduceStock(
             @PathVariable Long id,
-            @RequestParam Integer quantity) {
+            @RequestParam Integer quantity,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
 
-        service.reduceStock(id, quantity);
+        service.reduceStock(id, quantity, idempotencyKey);
 
         return "Stock Updated Successfully";
     }

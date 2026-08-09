@@ -1,7 +1,8 @@
 {\rtf1\ansi\ansicpg1252\cocoartf2870
 \cocoatextscaling0\cocoaplatform0{\fonttbl\f0\froman\fcharset0 Times-Bold;\f1\froman\fcharset0 Times-Roman;\f2\fnil\fcharset0 AppleColorEmoji;
 \f3\fswiss\fcharset0 Helvetica;\f4\fnil\fcharset0 Menlo-Regular;\f5\fmodern\fcharset0 Courier;
-\f6\froman\fcharset0 TimesNewRomanPS-BoldMT;\f7\fmodern\fcharset0 Courier-Bold;}
+\f6\froman\fcharset0 TimesNewRomanPS-BoldMT;\f7\fmodern\fcharset0 Courier-Bold;\f8\froman\fcharset0 TimesNewRomanPSMT;
+}
 {\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red109\green109\blue109;\red0\green0\blue0;
 }
 {\*\expandedcolortbl;;\csgray\c0;\cssrgb\c50196\c50196\c50196;\cssrgb\c0\c0\c0;
@@ -13,7 +14,7 @@
 {\list\listtemplateid5\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid401\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid5}
 {\list\listtemplateid6\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid501\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid6}}
 {\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}{\listoverride\listid3\listoverridecount0\ls3}{\listoverride\listid4\listoverridecount0\ls4}{\listoverride\listid5\listoverridecount0\ls5}{\listoverride\listid6\listoverridecount0\ls6}}
-\paperw11900\paperh16840\margl1440\margr1440\vieww30040\viewh18980\viewkind0
+\paperw11900\paperh16840\margl1440\margr1440\vieww30040\viewh15820\viewkind0
 \deftab720
 \pard\pardeftab720\sa280\partightenfactor0
 
@@ -159,7 +160,8 @@ CREATE TABLE orders (\
     user_id BIGINT NOT NULL,\
     quantity INT NOT NULL,\
     total_price DOUBLE NOT NULL,\
-    status VARCHAR(30) NOT NULL\
+    status VARCHAR(50) NOT NULL,\
+    idempotency_key VARCHAR(255) UNIQUE\
 );\
 \
 -- =====================================\
@@ -907,7 +909,7 @@ http://localhost:8082/swagger-ui/index.html#/\
 \
 \pard\pardeftab720\sa321\partightenfactor0
 
-\f0\b\fs48 \cf0 \outl0\strokewidth0 \strokec4 Step 5: Open Prometheus\
+\f0\b\fs48 \cf0 Step 5: Open Prometheus\
 \pard\pardeftab720\sa240\partightenfactor0
 
 \f1\b0\fs24 \cf0 Visit:\
@@ -986,9 +988,8 @@ You should see something like:\
 \cf0 UP\cell \lastrow\row
 \pard\pardeftab720\partightenfactor0
 
-\f5\fs26 \cf0 \outl0\strokewidth0 \
-\pard\pardeftab720\partightenfactor0
-\cf0 \outl0\strokewidth0 \strokec4 http://localhost:8080/actuator/health
+\f5\fs26 \cf0 \
+http://localhost:8080/actuator/health
 \f1\fs24  (API Gateway)\
 
 \f5\fs26 http://localhost:8081/actuator/health
@@ -1007,7 +1008,7 @@ You should see something like:\
 \f1\fs24  (Auth Service)\
 \pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardeftab720\pardirnatural\partightenfactor0
 
-\f4\fs22 \cf2 \kerning1\expnd0\expndtw0 \CocoaLigature0 \outl0\strokewidth0 \
+\f4\fs22 \cf2 \kerning1\expnd0\expndtw0 \CocoaLigature0 \
 \
 \pard\pardeftab720\sa321\partightenfactor0
 
@@ -1245,6 +1246,24 @@ Dockerfile
 Java dependencies\
 \ls5\ilvl0\kerning1\expnd0\expndtw0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
 Build configuration\
+\pard\tx720\pardeftab720\partightenfactor0
+\cf0 \
+Rebuild specific service\
+docker compose build order-service\
+docker compose up -d order-service\
+\
+Stop specific service\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f4\fs22 \cf2 \kerning1\expnd0\expndtw0 \CocoaLigature0 docker compose stop product-service\
+\
+Log specific service\
+docker compose logs order-service | grep -E "Retry|Product Service unavailable|Connection refused"
+\f1\fs24 \cf0 \expnd0\expndtw0\kerning0
+\CocoaLigature1 \
+\pard\tx720\pardeftab720\partightenfactor0
+\cf0 \
+\
 \pard\pardeftab720\sa321\partightenfactor0
 
 \f0\b\fs48 \cf0 3. Start containers in the background\
@@ -1589,7 +1608,25 @@ User Service is temporarily unavailable\
 \
 \
 \
+\'97\
+Concepts\
 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs24 \cf0 \expnd0\expndtw0\kerning0
+\CocoaLigature1 \outl0\strokewidth0 \strokec4 Retry 
+\f8 \uc0\u8594 
+\f1  Timeout 
+\f8 \uc0\u8594 
+\f1  Idempotency 
+\f8 \uc0\u8594 
+\f1  CircuitBreaker 
+\f8 \uc0\u8594 
+\f1  Bulkhead 
+\f8 \uc0\u8594 
+\f1  RateLimiter
+\f4\fs22 \cf2 \kerning1\expnd0\expndtw0 \CocoaLigature0 \outl0\strokewidth0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardeftab720\pardirnatural\partightenfactor0
 \
 \
 \

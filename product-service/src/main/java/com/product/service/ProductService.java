@@ -3,11 +3,12 @@ package com.product.service;
 import com.product.dto.ProductRequest;
 import com.product.dto.ProductResponse;
 import com.product.exception.ProductNotFoundException;
+import com.product.model.ProcessedRequest;
 import com.product.model.Product;
 import com.product.repository.ProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.product.repository.ProcessedRequestRepository;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -15,9 +16,14 @@ import java.util.stream.Collectors;
 public class ProductService {
 
     private final ProductRepository repository;
+    private final ProcessedRequestRepository processedRequestRepository;
 
-    public ProductService(ProductRepository repository) {
+    public ProductService(
+            ProductRepository repository,
+            ProcessedRequestRepository processedRequestRepository) {
+
         this.repository = repository;
+        this.processedRequestRepository = processedRequestRepository;
     }
 
     // Create Product
@@ -91,11 +97,21 @@ public class ProductService {
     }
 
     @Transactional
-    public void reduceStock(Long id, Integer quantity) {
+    public void reduceStock(
+            Long id,
+            Integer quantity,
+            String idempotencyKey) {
+
+        // Request already processed
+        if (processedRequestRepository
+                .existsByIdempotencyKey(idempotencyKey)) {
+
+            return;
+        }
 
         Product product = repository.findById(id)
                 .orElseThrow(() ->
-                   new ProductNotFoundException("Product not found")
+                        new ProductNotFoundException("Product not found")
                 );
 
         if (product.getQuantity() < quantity) {
@@ -106,6 +122,12 @@ public class ProductService {
                 product.getQuantity() - quantity);
 
         repository.save(product);
+
+        // Mark request as processed
+        ProcessedRequest processedRequest = new ProcessedRequest();
+        processedRequest.setIdempotencyKey(idempotencyKey);
+
+        processedRequestRepository.save(processedRequest);
     }
 
     // Entity -> Response DTO

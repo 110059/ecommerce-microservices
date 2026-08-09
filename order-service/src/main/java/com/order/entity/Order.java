@@ -1,9 +1,25 @@
 package com.order.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
-@Table(name = "orders")
+@Table(
+        name = "orders",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_orders_idempotency_key",
+                        columnNames = "idempotency_key"
+                )
+        }
+)
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class Order {
 
     @Id
@@ -23,65 +39,7 @@ public class Order {
 
     private String status;
 
-    public Order() {
-    }
+    @Column(name = "idempotency_key", nullable = false, unique = true)
+    private String idempotencyKey;
 
-    public Order(Long id, Long productId, Long userId,
-                 Integer quantity, Double totalPrice,
-                 String status) {
-        this.id = id;
-        this.productId = productId;
-        this.userId = userId;
-        this.quantity = quantity;
-        this.totalPrice = totalPrice;
-        this.status = status;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getProductId() {
-        return productId;
-    }
-
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public Integer getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
-
-    public Double getTotalPrice() {
-        return totalPrice;
-    }
-
-    public void setTotalPrice(Double totalPrice) {
-        this.totalPrice = totalPrice;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
 }

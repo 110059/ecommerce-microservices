@@ -1,9 +1,17 @@
 package com.order.dto;
 
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class OrderRequest {
 
     @NotNull(message = "User Id is required")
@@ -16,27 +24,8 @@ public class OrderRequest {
     @Positive(message = "Quantity must be greater than 0")
     private Integer quantity;
 
-    public Long getUserId() {
-        return userId;
-    }
+    // it will check the current request processed then will not reduce the stock again
+    @NotBlank(message = "Idempotency key is required")
+    private String idempotencyKey;
 
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public Long getProductId() {
-        return productId;
-    }
-
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
-
-    public Integer getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
 }

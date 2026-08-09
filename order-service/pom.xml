@@ -150,6 +150,12 @@
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
 
+<!--		lombok-->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+		</dependency>
+
 
 	</dependencies>
 	<dependencyManagement>

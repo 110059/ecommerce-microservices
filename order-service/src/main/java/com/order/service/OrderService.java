@@ -6,88 +6,184 @@ import com.order.dto.ProductResponse;
 import com.order.entity.Order;
 import com.order.exception.InsufficientStockException;
 import com.order.repository.OrderRepository;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+
     private static final Logger log =
             LoggerFactory.getLogger(OrderService.class);
-//    INFO → normal business events.
-//    DEBUG → detailed logs for your code.
-//    WARN → potential problems.
-//    ERROR → failures.
 
     private final OrderRepository repository;
     private final ProductClient productClient;
 
-    public OrderService(OrderRepository repository, ProductClient productClient) {
+    public OrderService(
+            OrderRepository repository,
+            ProductClient productClient) {
+
         this.repository = repository;
         this.productClient = productClient;
     }
 
-    @CircuitBreaker(
-            name = "productService",
-            fallbackMethod = "productServiceFallback"
-    )
+    // ============================================================
+    // CREATE ORDER
+    // ============================================================
+
+    @Transactional
     public OrderResponse createOrder(OrderRequest request) {
 
+        // 1. Idempotency check
+        if (request.getIdempotencyKey() != null) {
+
+            Optional<Order> existingOrder =
+                    repository.findByIdempotencyKey(
+                            request.getIdempotencyKey());
+
+            if (existingOrder.isPresent()) {
+
+                log.info(
+                        "Duplicate order request detected. idempotencyKey={}",
+                        request.getIdempotencyKey());
+
+                return mapToResponse(existingOrder.get());
+            }
+        }
+
+        // 2. Get product through protected Product Service call
+        ProductResponse product =
+                getProductFromProductService(request);
+
+        // 3. Check stock
+        //
+        // IMPORTANT:
+        // This is a business exception.
+        // It must NOT go through the Product Service fallback.
+        if (product.getQuantity() < request.getQuantity()) {
+
+            throw new InsufficientStockException(
+                    "Insufficient Stock. Available: "
+                            + product.getQuantity()
+                            + ", Requested: "
+                            + request.getQuantity()
+            );
+        }
+
+        // 4. Reduce stock
+        reduceProductStock(request);
+
+        // 5. Create order
         Order order = new Order();
 
         order.setUserId(request.getUserId());
         order.setProductId(request.getProductId());
         order.setQuantity(request.getQuantity());
+        order.setIdempotencyKey(request.getIdempotencyKey());
 
-        // Temporary calculation
-        //order.setTotalPrice(request.getQuantity() * 100.0);
-
-        ProductResponse product = productClient.getProduct(request.getProductId());
-
-
-        if (product.getQuantity() < request.getQuantity()) {
-            throw new InsufficientStockException("Insufficient Stock");
-        }
-
-        productClient.reduceStock(request.getProductId(), request.getQuantity());
-
-        double totalPrice = product.getPrice() * request.getQuantity();
+        // 6. Calculate total price
+        double totalPrice =
+                product.getPrice() * request.getQuantity();
 
         order.setTotalPrice(totalPrice);
-
         order.setStatus("PLACED");
 
+        // 7. Save order
         Order savedOrder = repository.save(order);
 
-        log.info(" order created for user {}", request.getUserId());
+        log.info(
+                "Order created successfully. userId={}, orderId={}, idempotencyKey={}",
+                request.getUserId(),
+                savedOrder.getId(),
+                request.getIdempotencyKey());
 
         return mapToResponse(savedOrder);
     }
 
-    public OrderResponse productServiceFallback(
+    // ============================================================
+    // GET PRODUCT
+    // ============================================================
+
+    @Retry(
+            name = "productService",
+            fallbackMethod = "productServiceFallback"
+    )
+    @CircuitBreaker(
+            name = "productService",
+            fallbackMethod = "productServiceFallback"
+    )
+    public ProductResponse getProductFromProductService(
+            OrderRequest request) {
+
+        return productClient.getProduct(
+                request.getProductId());
+    }
+
+    // ============================================================
+    // PRODUCT SERVICE FALLBACK
+    // ============================================================
+
+    public ProductResponse productServiceFallback(
             OrderRequest request,
             Throwable throwable) {
 
         log.error(
                 "Product Service unavailable. productId={}, error={}",
                 request.getProductId(),
-                throwable.getMessage()
-        );
+                throwable.getMessage());
 
-        return new OrderResponse(
-                null,
-                request.getUserId(),
-                request.getProductId(),
-                request.getQuantity(),
-                0.0,
-                "PRODUCT_SERVICE_UNAVAILABLE"
-        );
+        throw new RuntimeException(
+                "Product Service is temporarily unavailable");
     }
 
+    // ============================================================
+    // REDUCE STOCK
+    // ============================================================
+
+    @Retry(
+            name = "productService",
+            fallbackMethod = "reduceStockFallback"
+    )
+    @CircuitBreaker(
+            name = "productService",
+            fallbackMethod = "reduceStockFallback"
+    )
+    public void reduceProductStock(
+            OrderRequest request) {
+
+        productClient.reduceStock(
+                request.getProductId(),
+                request.getQuantity(),
+                request.getIdempotencyKey());
+    }
+
+    // ============================================================
+    // REDUCE STOCK FALLBACK
+    // ============================================================
+
+    public void reduceStockFallback(
+            OrderRequest request,
+            Throwable throwable) {
+
+        log.error(
+                "Unable to reduce product stock. productId={}, error={}",
+                request.getProductId(),
+                throwable.getMessage());
+
+        throw new RuntimeException(
+                "Product Service is temporarily unavailable while updating stock");
+    }
+
+    // ============================================================
+    // GET ALL ORDERS
+    // ============================================================
 
     public List<OrderResponse> getAllOrders() {
 
@@ -95,24 +191,34 @@ public class OrderService {
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-
     }
+
+    // ============================================================
+    // GET ORDER
+    // ============================================================
 
     public OrderResponse getOrder(Long id) {
 
         Order order = repository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Order not found"));
+                        new RuntimeException(
+                                "Order not found"));
 
         return mapToResponse(order);
-
     }
+
+    // ============================================================
+    // DELETE ORDER
+    // ============================================================
 
     public void deleteOrder(Long id) {
 
         repository.deleteById(id);
-
     }
+
+    // ============================================================
+    // ENTITY -> RESPONSE
+    // ============================================================
 
     private OrderResponse mapToResponse(Order order) {
 
@@ -123,7 +229,5 @@ public class OrderService {
                 order.getQuantity(),
                 order.getTotalPrice(),
                 order.getStatus());
-
     }
-
 }

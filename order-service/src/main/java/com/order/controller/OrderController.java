@@ -37,8 +37,11 @@ public class OrderController {
 
         OrderResponse response = orderService.createOrder(request);
 
-        eventProducer.sendOrderEvent(
-                "Order Created : " + response.getOrderId());
+
+        if ("PLACED".equals(response.getStatus())) {
+            eventProducer.sendOrderEvent(
+                    "Order Created : " + response.getOrderId());
+        }
 
         return response;
     }
