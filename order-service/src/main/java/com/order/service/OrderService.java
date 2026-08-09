@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 @Service
 public class OrderService {
@@ -30,6 +31,10 @@ public class OrderService {
         this.productClient = productClient;
     }
 
+    @CircuitBreaker(
+            name = "productService",
+            fallbackMethod = "productServiceFallback"
+    )
     public OrderResponse createOrder(OrderRequest request) {
 
         Order order = new Order();
@@ -62,6 +67,27 @@ public class OrderService {
 
         return mapToResponse(savedOrder);
     }
+
+    public OrderResponse productServiceFallback(
+            OrderRequest request,
+            Throwable throwable) {
+
+        log.error(
+                "Product Service unavailable. productId={}, error={}",
+                request.getProductId(),
+                throwable.getMessage()
+        );
+
+        return new OrderResponse(
+                null,
+                request.getUserId(),
+                request.getProductId(),
+                request.getQuantity(),
+                0.0,
+                "PRODUCT_SERVICE_UNAVAILABLE"
+        );
+    }
+
 
     public List<OrderResponse> getAllOrders() {
 
