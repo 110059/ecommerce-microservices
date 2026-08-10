@@ -46,6 +46,21 @@ public class OrderController {
         return response;
     }
 
+
+    @PutMapping("/{id}/cancel")
+    public OrderResponse cancelOrder(
+            @PathVariable Long id) {
+
+        OrderResponse response =
+                orderService.cancelOrder(id);
+
+        eventProducer.sendOrderEvent(
+                "Order Cancelled : " + response.getOrderId());
+
+        return response;
+    }
+
+
     @GetMapping("/all")
     public List<OrderResponse> getAllOrders() {
 

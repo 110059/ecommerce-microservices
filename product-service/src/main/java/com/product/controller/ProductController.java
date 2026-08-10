@@ -70,4 +70,17 @@ public class ProductController {
 
         return "Stock Updated Successfully";
     }
+
+
+    @PutMapping("/{id}/restore-stock")
+    public String restoreStock(
+            @PathVariable Long id,
+            @RequestParam Integer quantity) {
+
+        service.restoreStock(id, quantity);
+
+        return "Stock Restored Successfully";
+    }
+
+
 }

@@ -130,6 +130,25 @@ public class ProductService {
         processedRequestRepository.save(processedRequest);
     }
 
+    @Transactional
+    public void restoreStock(Long id, Integer quantity) {
+
+        Product product = repository.findById(id)
+                .orElseThrow(() ->
+                        new ProductNotFoundException(
+                                "Product not found with id : " + id));
+
+        if (quantity == null || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "Quantity must be greater than 0");
+        }
+
+        product.setQuantity(
+                product.getQuantity() + quantity);
+
+        repository.save(product);
+    }
+
     // Entity -> Response DTO
     private ProductResponse mapToResponse(Product product) {
 

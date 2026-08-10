@@ -127,5 +127,24 @@ public class GlobalExceptionHandler {
                 .body(error);
     }
 
+    @ExceptionHandler(OrderCancellationException .class)
+    public ResponseEntity<ErrorResponse> handleOrderCancellationException(
+            OrderCancellationException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.CONFLICT.value(),
+                "ORDER_CANCELLATION_FAILED",
+                ex.getMessage(),
+                request.getRequestURI());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(error);
+    }
+
+
+
 
 }

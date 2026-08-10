@@ -5,6 +5,7 @@ import com.order.dto.OrderResponse;
 import com.order.dto.ProductResponse;
 import com.order.entity.Order;
 import com.order.exception.InsufficientStockException;
+import com.order.exception.OrderCancellationException;
 import com.order.repository.OrderRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -180,6 +181,57 @@ public class OrderService {
         throw new RuntimeException(
                 "Product Service is temporarily unavailable while updating stock");
     }
+
+    // ============================================================
+    // UPDATE ORDER STATUS TO CANCEL
+    // ============================================================
+
+    public OrderResponse cancelOrder(Long id) {
+
+        // 1. Find order
+        Order order = repository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Order not found with id : " + id));
+
+        // 2. Prevent duplicate cancellation
+        if ("CANCELLED".equals(order.getStatus())) {
+
+            throw new OrderCancellationException(
+                    "Order " + id + " is already cancelled");
+        }
+
+        // 3. Only placed orders can be cancelled
+        if (!"PLACED".equals(order.getStatus())) {
+
+            throw new OrderCancellationException(
+                    "Order " + id +
+                            " cannot be cancelled. Current status: "
+                            + order.getStatus());
+        }
+
+        // 4. Restore product stock
+        productClient.restoreStock(
+                order.getProductId(),
+                order.getQuantity()
+        );
+
+        // 5. Change order status
+        order.setStatus("CANCELLED");
+
+        // 6. Save updated order
+        Order updatedOrder = repository.save(order);
+
+        log.info(
+                "Order cancelled successfully. orderId={}, productId={}, quantity={}",
+                order.getId(),
+                order.getProductId(),
+                order.getQuantity()
+        );
+
+        return mapToResponse(updatedOrder);
+    }
+
 
     // ============================================================
     // GET ALL ORDERS
