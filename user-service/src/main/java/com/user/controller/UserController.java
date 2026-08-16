@@ -25,28 +25,22 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public String getUsers(@PathVariable int id) {
-        return "Sync : data from user service id " + id;
+    public User getUser(@PathVariable int id) {
+        return service.getById(id);
     }
 
     @GetMapping("/admin")
     public String admin() {
-
         return "Admin API";
-
     }
 
     @GetMapping("/user")
     public String user() {
-
         return "User API";
-
     }
 
     @GetMapping("/profile")
     public String profile() {
-
         return "Logged In";
-
     }
 }

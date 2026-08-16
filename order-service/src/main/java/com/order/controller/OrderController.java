@@ -2,6 +2,7 @@ package com.order.controller;
 
 import com.order.dto.OrderRequest;
 import com.order.dto.OrderResponse;
+import com.order.dto.UserResponse;
 import com.order.service.OrderEventProducer;
 import com.order.service.OrderService;
 import com.order.service.UserClient;
@@ -39,8 +40,7 @@ public class OrderController {
 
 
         if ("PLACED".equals(response.getStatus())) {
-            eventProducer.sendOrderEvent(
-                    "Order Created : " + response.getOrderId());
+            eventProducer.sendOrderEvent(response);
         }
 
         return response;
@@ -54,8 +54,8 @@ public class OrderController {
         OrderResponse response =
                 orderService.cancelOrder(id);
 
-        eventProducer.sendOrderEvent(
-                "Order Cancelled : " + response.getOrderId());
+        eventProducer.sendOrderCancelledEvent(response);
+
 
         return response;
     }
@@ -91,10 +91,8 @@ public class OrderController {
     // ============================
 
     @GetMapping("/async")
-    public String orderAsync() {
-
-        return eventProducer.sendOrderEvent(
-                "Order Event Sent");
+    public void orderAsync() {
+        eventProducer.sendOrderEvent(new OrderResponse());
 
     }
 
@@ -105,10 +103,9 @@ public class OrderController {
     public String orderSync(
             @PathVariable int id) {
 
-        String userResponse = userClient.getUser(id);
+        UserResponse userResponse = userClient.getUser(id);
 
-        eventProducer.sendOrderEvent(
-                "Sync Event for User : " + id);
+        eventProducer.sendOrderEvent(new OrderResponse());
 
         return "Order Created For User -> "
                 + userResponse;

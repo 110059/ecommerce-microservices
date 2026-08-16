@@ -7,9 +7,10 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
-public class OrderResponse {
+@NoArgsConstructor
+public class OrderEvent {
+
     private Long orderId;
     private Long userId;
     private Long productId;

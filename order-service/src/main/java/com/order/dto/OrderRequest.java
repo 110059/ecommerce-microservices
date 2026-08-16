@@ -15,6 +15,7 @@ import lombok.Setter;
 public class OrderRequest {
 
     @NotNull(message = "User Id is required")
+    //@Positive(message = "User Id must be greater than 0")
     private Long userId;
 
     @NotNull(message = "Product Id is required")

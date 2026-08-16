@@ -3,6 +3,7 @@ package com.order.service;
 import com.order.dto.OrderRequest;
 import com.order.dto.OrderResponse;
 import com.order.dto.ProductResponse;
+import com.order.dto.UserResponse;
 import com.order.entity.Order;
 import com.order.exception.InsufficientStockException;
 import com.order.exception.OrderCancellationException;
@@ -26,23 +27,21 @@ public class OrderService {
 
     private final OrderRepository repository;
     private final ProductClient productClient;
+    private final UserClient userClient;
 
     public OrderService(
             OrderRepository repository,
-            ProductClient productClient) {
+            ProductClient productClient, UserClient userClient) {
 
         this.repository = repository;
         this.productClient = productClient;
+        this.userClient = userClient;
     }
-
-    // ============================================================
-    // CREATE ORDER
-    // ============================================================
 
     @Transactional
     public OrderResponse createOrder(OrderRequest request) {
 
-        // 1. Idempotency check
+        // 1. Idempotency check FIRST
         if (request.getIdempotencyKey() != null) {
 
             Optional<Order> existingOrder =
@@ -59,15 +58,19 @@ public class OrderService {
             }
         }
 
-        // 2. Get product through protected Product Service call
+        // 2. Validate User
+//        UserResponse user =
+//                userClient.getUser(Math.toIntExact(request.getUserId()));
+//
+//        log.info(
+//                "User validated successfully. userId={}",
+//                user.getId());
+
+        // 3. Get Product
         ProductResponse product =
                 getProductFromProductService(request);
 
-        // 3. Check stock
-        //
-        // IMPORTANT:
-        // This is a business exception.
-        // It must NOT go through the Product Service fallback.
+        // 4. Check stock
         if (product.getQuantity() < request.getQuantity()) {
 
             throw new InsufficientStockException(
@@ -78,26 +81,27 @@ public class OrderService {
             );
         }
 
-        // 4. Reduce stock
+        // 5. Reduce stock
         reduceProductStock(request);
 
-        // 5. Create order
+        // 6. Create order
         Order order = new Order();
 
-        order.setUserId(request.getUserId());
+        order.setUserId((long) request.getUserId());
         order.setProductId(request.getProductId());
         order.setQuantity(request.getQuantity());
         order.setIdempotencyKey(request.getIdempotencyKey());
 
-        // 6. Calculate total price
+        // 7. Calculate price
         double totalPrice =
                 product.getPrice() * request.getQuantity();
 
         order.setTotalPrice(totalPrice);
         order.setStatus("PLACED");
 
-        // 7. Save order
-        Order savedOrder = repository.save(order);
+        // 8. Save order
+        Order savedOrder =
+                repository.save(order);
 
         log.info(
                 "Order created successfully. userId={}, orderId={}, idempotencyKey={}",
@@ -182,10 +186,11 @@ public class OrderService {
                 "Product Service is temporarily unavailable while updating stock");
     }
 
-    // ============================================================
-    // UPDATE ORDER STATUS TO CANCEL
-    // ============================================================
+ // ============================================================
+ // CANCEL ORDER
+ // ============================================================
 
+    @Transactional
     public OrderResponse cancelOrder(Long id) {
 
         // 1. Find order
@@ -201,12 +206,12 @@ public class OrderService {
                     "Order " + id + " is already cancelled");
         }
 
-        // 3. Only placed orders can be cancelled
+        // 3. Only PLACED orders can be cancelled
         if (!"PLACED".equals(order.getStatus())) {
 
             throw new OrderCancellationException(
-                    "Order " + id +
-                            " cannot be cancelled. Current status: "
+                    "Order " + id
+                            + " cannot be cancelled. Current status: "
                             + order.getStatus());
         }
 
@@ -231,6 +236,7 @@ public class OrderService {
 
         return mapToResponse(updatedOrder);
     }
+
 
 
     // ============================================================

@@ -1,21 +1,101 @@
 package com.order.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.order.dto.OrderResponse;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class OrderEventProducer {
 
-        @Autowired
-        private KafkaTemplate<String, String> kafkaTemplate;
+    private static final String ORDER_CREATED_TOPIC = "order-created";
+    private static final String ORDER_CANCELLED_TOPIC = "order-cancelled";
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-        public String sendOrderEvent(String event) {
+    public OrderEventProducer(
+            KafkaTemplate<String, String> kafkaTemplate,
+            ObjectMapper objectMapper) {
 
-            kafkaTemplate.send("order-created", event);
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
+    }
 
-            System.out.println("Event Sent To Kafka");
-            return event;
+    public void sendOrderEvent(OrderResponse order) {
+
+        sendEvent(ORDER_CREATED_TOPIC, order);
+    }
+
+    public void sendOrderCancelledEvent(OrderResponse order) {
+
+        sendEvent(ORDER_CANCELLED_TOPIC, order);
+    }
+
+    private void sendEvent(String topic, OrderResponse order) {
+
+        try {
+
+            String message = objectMapper.writeValueAsString(order);
+
+            kafkaTemplate.send(topic, message)
+                    .whenComplete((result, exception) -> {
+
+                        if (exception != null) {
+
+                            System.err.println(
+                                    "Failed to send Kafka event: "
+                                            + exception.getMessage()
+                            );
+
+                        } else {
+
+                            System.out.println(
+                                    "Kafka event sent successfully. topic="
+                                            + topic
+                                            + ", message="
+                                            + message
+                            );
+                        }
+                    });
+
+        } catch (JsonProcessingException e) {
+
+            throw new RuntimeException(
+                    "Failed to convert order to JSON", e);
         }
     }
 
+//    public void sendOrderEvent(OrderResponse order) {
+//
+//        try {
+//
+//            String message =
+//                    objectMapper.writeValueAsString(order);
+//
+//            kafkaTemplate.send(TOPIC, message)
+//                    .whenComplete((result, exception) -> {
+//
+//                        if (exception != null) {
+//
+//                            System.err.println(
+//                                    "Failed to send Kafka event: "
+//                                            + exception.getMessage()
+//                            );
+//
+//                        } else {
+//
+//                            System.out.println(
+//                                    "Order event sent to Kafka: "
+//                                            + message
+//                            );
+//                        }
+//                    });
+//
+//        } catch (JsonProcessingException e) {
+//
+//            throw new RuntimeException(
+//                    "Failed to convert order to JSON", e);
+//        }
+//    }
+}
