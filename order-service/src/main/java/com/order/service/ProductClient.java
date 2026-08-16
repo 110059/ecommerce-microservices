@@ -17,7 +17,6 @@ public interface ProductClient {
             @RequestHeader("Idempotency-Key") String idempotencyKey
     );
 
-
     @PutMapping("/products/{id}/restore-stock")
     String restoreStock(
             @PathVariable("id") Long id,

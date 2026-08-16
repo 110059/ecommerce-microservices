@@ -66,36 +66,4 @@ public class OrderEventProducer {
         }
     }
 
-//    public void sendOrderEvent(OrderResponse order) {
-//
-//        try {
-//
-//            String message =
-//                    objectMapper.writeValueAsString(order);
-//
-//            kafkaTemplate.send(TOPIC, message)
-//                    .whenComplete((result, exception) -> {
-//
-//                        if (exception != null) {
-//
-//                            System.err.println(
-//                                    "Failed to send Kafka event: "
-//                                            + exception.getMessage()
-//                            );
-//
-//                        } else {
-//
-//                            System.out.println(
-//                                    "Order event sent to Kafka: "
-//                                            + message
-//                            );
-//                        }
-//                    });
-//
-//        } catch (JsonProcessingException e) {
-//
-//            throw new RuntimeException(
-//                    "Failed to convert order to JSON", e);
-//        }
-//    }
 }

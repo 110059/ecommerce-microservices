@@ -1,15 +1,21 @@
 package com.order.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.order.dto.OrderRequest;
 import com.order.dto.OrderResponse;
 import com.order.dto.ProductResponse;
 import com.order.dto.UserResponse;
 import com.order.entity.Order;
+import com.order.entity.OutboxEvent;
 import com.order.exception.InsufficientStockException;
 import com.order.exception.OrderCancellationException;
 import com.order.repository.OrderRepository;
+import com.order.repository.OutboxEventRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,23 +26,20 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@Getter
+@Setter
+@AllArgsConstructor
 public class OrderService {
 
     private static final Logger log =
             LoggerFactory.getLogger(OrderService.class);
 
     private final OrderRepository repository;
+    private final OutboxEventRepository outboxEventRepository;
     private final ProductClient productClient;
     private final UserClient userClient;
+    private final ObjectMapper objectMapper;
 
-    public OrderService(
-            OrderRepository repository,
-            ProductClient productClient, UserClient userClient) {
-
-        this.repository = repository;
-        this.productClient = productClient;
-        this.userClient = userClient;
-    }
 
     @Transactional
     public OrderResponse createOrder(OrderRequest request) {
@@ -59,16 +62,12 @@ public class OrderService {
         }
 
         // 2. Validate User
-        UserResponse user =
-                userClient.getUser(request.getUserId());
+        UserResponse user = userClient.getUser(request.getUserId());
 
-        log.info(
-                "User validated successfully. userId={}",
-                user.getId());
+        log.info("User validated successfully. userId={}",user.getId());
 
         // 3. Get Product
-        ProductResponse product =
-                getProductFromProductService(request);
+        ProductResponse product = getProductFromProductService(request);
 
         // 4. Check stock
         if (product.getQuantity() < request.getQuantity()) {
@@ -93,8 +92,7 @@ public class OrderService {
         order.setIdempotencyKey(request.getIdempotencyKey());
 
         // 7. Calculate price
-        double totalPrice =
-                product.getPrice() * request.getQuantity();
+        double totalPrice = product.getPrice() * request.getQuantity();
 
         order.setTotalPrice(totalPrice);
         order.setStatus("PLACED");
@@ -103,13 +101,28 @@ public class OrderService {
         Order savedOrder =
                 repository.save(order);
 
+        OrderResponse response =
+                mapToResponse(savedOrder);
+
+        // 9. Outbox event save
+        OutboxEvent event = new OutboxEvent();
+
+        event.setEventType("ORDER_CREATED");
+        event.setAggregateType("ORDER");
+        event.setAggregateId(savedOrder.getId());
+        event.setPayload(toJson(response));
+        event.setStatus("PENDING");
+        event.setCreatedAt(java.time.LocalDateTime.now());
+
+        outboxEventRepository.save(event);
+
         log.info(
-                "Order created successfully. userId={}, orderId={}, idempotencyKey={}",
+                "Order and outbox event created successfully. userId={}, orderId={}, idempotencyKey={}",
                 request.getUserId(),
                 savedOrder.getId(),
                 request.getIdempotencyKey());
 
-        return mapToResponse(savedOrder);
+        return response;
     }
 
     // ============================================================
@@ -227,17 +240,36 @@ public class OrderService {
         // 6. Save updated order
         Order updatedOrder = repository.save(order);
 
-        log.info(
-                "Order cancelled successfully. orderId={}, productId={}, quantity={}",
-                order.getId(),
-                order.getProductId(),
-                order.getQuantity()
-        );
+        // 7. Create outbox event
+        OrderResponse response = mapToResponse(updatedOrder);
 
-        return mapToResponse(updatedOrder);
+        OutboxEvent event = new OutboxEvent();
+
+        event.setEventType("ORDER_CANCELLED");
+        event.setAggregateType("ORDER");
+        event.setAggregateId(updatedOrder.getId());
+        event.setPayload(toJson(response));
+        event.setStatus("PENDING");
+        event.setCreatedAt(java.time.LocalDateTime.now());
+
+        outboxEventRepository.save(event);
+
+        log.info(
+                "Order cancellation and outbox event created successfully. orderId={}",
+                updatedOrder.getId());
+
+        return response;
     }
 
+    private String toJson(OrderResponse response) {
 
+        try {
+            return objectMapper.writeValueAsString(response);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to convert order event to JSON", e);
+        }
+    }
 
     // ============================================================
     // GET ALL ORDERS
