@@ -59,12 +59,12 @@ public class OrderService {
         }
 
         // 2. Validate User
-//        UserResponse user =
-//                userClient.getUser(Math.toIntExact(request.getUserId()));
-//
-//        log.info(
-//                "User validated successfully. userId={}",
-//                user.getId());
+        UserResponse user =
+                userClient.getUser(request.getUserId());
+
+        log.info(
+                "User validated successfully. userId={}",
+                user.getId());
 
         // 3. Get Product
         ProductResponse product =

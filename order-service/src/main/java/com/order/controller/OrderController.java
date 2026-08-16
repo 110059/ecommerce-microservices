@@ -101,7 +101,7 @@ public class OrderController {
             name = "userService",
             fallbackMethod = "fallbackResponse")
     public String orderSync(
-            @PathVariable int id) {
+            @PathVariable Long id) {
 
         UserResponse userResponse = userClient.getUser(id);
 

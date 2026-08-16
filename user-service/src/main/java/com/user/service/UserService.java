@@ -22,7 +22,7 @@ public class UserService {
         return repo.findAll();
     }
 
-    public User getById(int id) {
+    public User getById(Long id) {
 
         return repo.findById(id)
                 .orElseThrow(() ->
