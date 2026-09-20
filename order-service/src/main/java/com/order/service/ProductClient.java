@@ -14,13 +14,15 @@ public interface ProductClient {
     String reduceStock(
             @PathVariable("id") Long id,
             @RequestParam("quantity") Integer quantity,
+            @RequestParam("orderId") Long orderId,
+            @RequestParam("userId") Long userId,
+            @RequestParam("totalPrice") Double totalPrice,
             @RequestHeader("Idempotency-Key") String idempotencyKey
     );
 
     @PutMapping("/products/{id}/restore-stock")
     String restoreStock(
             @PathVariable("id") Long id,
-            @RequestParam("quantity") Integer quantity);
-
-
+            @RequestParam("quantity") Integer quantity
+    );
 }

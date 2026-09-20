@@ -62,12 +62,16 @@ public class OrderService {
         }
 
         // 2. Validate User
-        UserResponse user = userClient.getUser(request.getUserId());
+        UserResponse user =
+                userClient.getUser(request.getUserId());
 
-        log.info("User validated successfully. userId={}",user.getId());
+        log.info(
+                "User validated successfully. userId={}",
+                user.getId());
 
         // 3. Get Product
-        ProductResponse product = getProductFromProductService(request);
+        ProductResponse product =
+                getProductFromProductService(request);
 
         // 4. Check stock
         if (product.getQuantity() < request.getQuantity()) {
@@ -80,46 +84,66 @@ public class OrderService {
             );
         }
 
-        // 5. Reduce stock
-        reduceProductStock(request);
+        // 5. Calculate price
+        double totalPrice =
+                product.getPrice() * request.getQuantity();
 
-        // 6. Create order
+        // 6. Create order FIRST
+        //    We need orderId before reserving stock.
         Order order = new Order();
 
         order.setUserId((long) request.getUserId());
         order.setProductId(request.getProductId());
         order.setQuantity(request.getQuantity());
         order.setIdempotencyKey(request.getIdempotencyKey());
-
-        // 7. Calculate price
-        double totalPrice = product.getPrice() * request.getQuantity();
-
         order.setTotalPrice(totalPrice);
-        order.setStatus("PLACED");
 
-        // 8. Save order
+        // Saga starts in pending state
+        order.setStatus("STOCK_PENDING");
+
         Order savedOrder =
                 repository.save(order);
 
-        OrderResponse response =
-                mapToResponse(savedOrder);
+        log.info(
+                "Order created with STOCK_PENDING status. orderId={}",
+                savedOrder.getId());
 
-        // 9. Outbox event save
+        // 7. Reserve stock
+        reduceProductStock(
+                request,
+                savedOrder.getId(),
+                savedOrder.getUserId(),
+                totalPrice
+        );
+
+        // 8. Stock successfully reserved
+        savedOrder.setStatus("STOCK_RESERVED");
+
+        Order updatedOrder =
+                repository.save(savedOrder);
+
+        // 9. Create response
+        OrderResponse response =
+                mapToResponse(updatedOrder);
+
+        // 10. Outbox event
         OutboxEvent event = new OutboxEvent();
 
         event.setEventType("ORDER_CREATED");
         event.setAggregateType("ORDER");
-        event.setAggregateId(savedOrder.getId());
+        event.setAggregateId(updatedOrder.getId());
         event.setPayload(toJson(response));
         event.setStatus("PENDING");
-        event.setCreatedAt(java.time.LocalDateTime.now());
+        event.setCreatedAt(
+                java.time.LocalDateTime.now());
 
         outboxEventRepository.save(event);
 
         log.info(
-                "Order and outbox event created successfully. userId={}, orderId={}, idempotencyKey={}",
+                "Order and outbox event created successfully. " +
+                        "userId={}, orderId={}, idempotencyKey={}",
                 request.getUserId(),
-                savedOrder.getId(),
+                updatedOrder.getId(),
                 request.getIdempotencyKey());
 
         return response;
@@ -174,25 +198,35 @@ public class OrderService {
             fallbackMethod = "reduceStockFallback"
     )
     public void reduceProductStock(
-            OrderRequest request) {
+            OrderRequest request,
+            Long orderId,
+            Long userId,
+            Double totalPrice) {
 
         productClient.reduceStock(
                 request.getProductId(),
                 request.getQuantity(),
+                orderId,
+                userId,
+                totalPrice,
                 request.getIdempotencyKey());
     }
 
     // ============================================================
     // REDUCE STOCK FALLBACK
     // ============================================================
-
     public void reduceStockFallback(
             OrderRequest request,
+            Long orderId,
+            Long userId,
+            Double totalPrice,
             Throwable throwable) {
 
         log.error(
-                "Unable to reduce product stock. productId={}, error={}",
+                "Unable to reduce product stock. " +
+                        "productId={}, orderId={}, error={}",
                 request.getProductId(),
+                orderId,
                 throwable.getMessage());
 
         throw new RuntimeException(

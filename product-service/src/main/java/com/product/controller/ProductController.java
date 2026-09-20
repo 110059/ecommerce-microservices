@@ -64,9 +64,19 @@ public class ProductController {
     public String reduceStock(
             @PathVariable Long id,
             @RequestParam Integer quantity,
+            @RequestParam Long orderId,
+            @RequestParam Long userId,
+            @RequestParam Double totalPrice,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
 
-        service.reduceStock(id, quantity, idempotencyKey);
+        service.reduceStock(
+                id,
+                quantity,
+                orderId,
+                userId,
+                totalPrice,
+                idempotencyKey
+        );
 
         return "Stock Updated Successfully";
     }

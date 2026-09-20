@@ -138,21 +138,18 @@ services:
   product-service:
     build: ./product-service
     container_name: product-service
-
     ports:
       - "8082:8082"
-
     depends_on:
       - mysql
+      - kafka
       - eureka-server
-
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/microservices
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
-
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
-
     networks:
       - micro-net
 
@@ -226,6 +223,27 @@ services:
     networks:
       - micro-net
 
+  # ========================
+  # PAYMENT SERVICE
+  # ========================
+  payment-service:
+    build: ./payment-service
+    container_name: payment-service
+
+    ports:
+      - "8086:8086"
+
+    depends_on:
+      - kafka
+      - eureka-server
+
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+
+    networks:
+      - micro-net
 
   # ========================
   # PROMETHEUS
@@ -247,6 +265,7 @@ services:
       - product-service
       - order-service
       - notification-service
+      - payment-service
 
     networks:
       - micro-net

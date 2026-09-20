@@ -2,6 +2,8 @@ package com.product.service;
 
 import com.product.dto.ProductRequest;
 import com.product.dto.ProductResponse;
+import com.product.dto.StockReservedEvent;
+import com.product.kafka.StockEventProducer;
 import com.product.exception.ProductNotFoundException;
 import com.product.model.ProcessedRequest;
 import com.product.model.Product;
@@ -12,18 +14,23 @@ import com.product.repository.ProcessedRequestRepository;
 import java.util.List;
 import java.util.stream.Collectors;
 
+
 @Service
 public class ProductService {
 
     private final ProductRepository repository;
     private final ProcessedRequestRepository processedRequestRepository;
 
+    private final StockEventProducer stockEventProducer;
+
     public ProductService(
             ProductRepository repository,
-            ProcessedRequestRepository processedRequestRepository) {
+            ProcessedRequestRepository processedRequestRepository,
+            StockEventProducer stockEventProducer) {
 
         this.repository = repository;
         this.processedRequestRepository = processedRequestRepository;
+        this.stockEventProducer = stockEventProducer;
     }
 
     // Create Product
@@ -53,7 +60,7 @@ public class ProductService {
                 .collect(Collectors.toList());
     }
 
-    // Get Product By Id
+    // Get Product By id
     public ProductResponse getById(Long id) {
 
         Product product = repository.findById(id)
@@ -100,6 +107,9 @@ public class ProductService {
     public void reduceStock(
             Long id,
             Integer quantity,
+            Long orderId,
+            Long userId,
+            Double totalPrice,
             String idempotencyKey) {
 
         // Request already processed
@@ -128,6 +138,17 @@ public class ProductService {
         processedRequest.setIdempotencyKey(idempotencyKey);
 
         processedRequestRepository.save(processedRequest);
+
+        // Publish Saga event
+        StockReservedEvent event = new StockReservedEvent(
+                orderId,
+                userId,
+                id,
+                quantity,
+                totalPrice
+        );
+
+        stockEventProducer.sendStockReserved(event);
     }
 
     @Transactional
