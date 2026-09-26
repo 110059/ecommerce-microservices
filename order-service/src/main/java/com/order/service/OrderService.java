@@ -116,26 +116,25 @@ public class OrderService {
                 totalPrice
         );
 
-        // 8. Stock successfully reserved
-        savedOrder.setStatus("STOCK_RESERVED");
-
-        Order updatedOrder =
-                repository.save(savedOrder);
+//        // 8. Stock successfully reserved
+//        savedOrder.setStatus("STOCK_RESERVED");
+//
+//        Order updatedOrder =
+//                repository.save(savedOrder);
 
         // 9. Create response
         OrderResponse response =
-                mapToResponse(updatedOrder);
+                mapToResponse(savedOrder);
 
         // 10. Outbox event
         OutboxEvent event = new OutboxEvent();
 
         event.setEventType("ORDER_CREATED");
         event.setAggregateType("ORDER");
-        event.setAggregateId(updatedOrder.getId());
+        event.setAggregateId(savedOrder.getId());
         event.setPayload(toJson(response));
         event.setStatus("PENDING");
-        event.setCreatedAt(
-                java.time.LocalDateTime.now());
+        event.setCreatedAt(java.time.LocalDateTime.now());
 
         outboxEventRepository.save(event);
 
@@ -143,7 +142,7 @@ public class OrderService {
                 "Order and outbox event created successfully. " +
                         "userId={}, orderId={}, idempotencyKey={}",
                 request.getUserId(),
-                updatedOrder.getId(),
+                savedOrder.getId(),
                 request.getIdempotencyKey());
 
         return response;

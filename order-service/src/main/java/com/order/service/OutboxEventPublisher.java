@@ -27,7 +27,7 @@ public class OutboxEventPublisher {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    @Scheduled(fixedDelay = 20000)
+    @Scheduled(fixedDelay = 30000)
     public void publishPendingEvents() {
 
         List<OutboxEvent> events =

@@ -3,35 +3,31 @@ package com.product.service;
 import com.product.dto.ProductRequest;
 import com.product.dto.ProductResponse;
 import com.product.dto.StockReservedEvent;
-import com.product.kafka.StockEventProducer;
+import com.product.entity.OutboxEvent;
 import com.product.exception.ProductNotFoundException;
 import com.product.model.ProcessedRequest;
 import com.product.model.Product;
+import com.product.repository.OutboxEventRepository;
 import com.product.repository.ProductRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.product.repository.ProcessedRequestRepository;
 import java.util.List;
 import java.util.stream.Collectors;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
+@AllArgsConstructor
 public class ProductService {
 
     private final ProductRepository repository;
+    private final OutboxEventRepository outboxEventRepository;
     private final ProcessedRequestRepository processedRequestRepository;
+    private final ObjectMapper objectMapper;
 
-    private final StockEventProducer stockEventProducer;
 
-    public ProductService(
-            ProductRepository repository,
-            ProcessedRequestRepository processedRequestRepository,
-            StockEventProducer stockEventProducer) {
-
-        this.repository = repository;
-        this.processedRequestRepository = processedRequestRepository;
-        this.stockEventProducer = stockEventProducer;
-    }
 
     // Create Product
     public ProductResponse save(ProductRequest request) {
@@ -148,7 +144,26 @@ public class ProductService {
                 totalPrice
         );
 
-        stockEventProducer.sendStockReserved(event);
+
+        try {
+            OutboxEvent outboxEvent = new OutboxEvent();
+
+            outboxEvent.setEventType("STOCK_RESERVED");
+            outboxEvent.setAggregateType("PRODUCT");
+            outboxEvent.setAggregateId(id);
+            outboxEvent.setPayload(
+                    objectMapper.writeValueAsString(event));
+            outboxEvent.setStatus("PENDING");
+            outboxEvent.setCreatedAt(
+                    java.time.LocalDateTime.now());
+
+            outboxEventRepository.save(outboxEvent);
+
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(
+                    "Failed to serialize stock reserved event",
+                    e);
+        }
     }
 
     @Transactional
